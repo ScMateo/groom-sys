@@ -1,9 +1,16 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from datetime import date
 from app.core.database import get_db
 from app.models.appointment import AppointmentModel
-from app.schemas.appointment import AvailabilityResponse, TimeSlot
+from app.models.pet import PetModel
+from app.schemas.appointment import (
+    AppointmentCreate,
+    AppointmentResponse,
+    AvailabilityResponse,
+    TimeSlot,
+)
 
 router = APIRouter(prefix="/api/appointments", tags=["Appointments"])
 
@@ -34,3 +41,46 @@ def get_availability(
     ]
 
     return AvailabilityResponse(date=target_date, slots=slots)
+
+
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=AppointmentResponse)
+def create_appointment(payload: AppointmentCreate, db: Session = Depends(get_db)):
+    # 1. Verificar que la mascota exista
+    pet = db.query(PetModel).filter(PetModel.id == payload.pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=400, detail="La mascota no existe")
+
+    # 2. Verificar que el horario no esté ya reservado
+    existing = db.query(AppointmentModel).filter(
+        AppointmentModel.appt_date == payload.appt_date,
+        AppointmentModel.time_slot == payload.time_slot,
+        AppointmentModel.status != "CANCELLED",
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="El horario ya está reservado")
+
+    # 3. Armar la nueva cita
+    appointment = AppointmentModel(
+        pet_id=payload.pet_id,
+        appt_date=payload.appt_date,
+        time_slot=payload.time_slot,
+        status="confirmada",
+    )
+
+    # 4. Guardar en la BD (respaldo ante condición de carrera con el mismo horario)
+    try:
+        db.add(appointment)
+        db.commit()
+        db.refresh(appointment)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="El horario ya está reservado")
+
+    # 5. Responder con los datos de la cita creada
+    return {
+        "appointment_id": appointment.id,
+        "pet_id": appointment.pet_id,
+        "appt_date": appointment.appt_date,
+        "time_slot": appointment.time_slot,
+        "status": appointment.status,
+    }
