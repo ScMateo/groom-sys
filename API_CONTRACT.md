@@ -17,8 +17,17 @@ Todas las respuestas de error utilizan el código HTTP correspondiente y la sigu
 409 Conflict: Conflicto de estado (ej. horario reservado por otro usuario).
 500 Internal Server Error: Error no esperado en el servidor.
 
+## 2. Horarios
 
-## 2. Endpoints del Sistema
+Para simular el contexto real de una peluquería de mascotas, se definen que cada cita tendrá una duración de 1 hora, solo dentro de los tiempos preestablecidos de acuerdo al día de la semana. Suponiendo a su vez que el día domingo no se habre el establecimiento.
+
+Lunes a viernes: Se atiende desde las 9:00 am hasta las 5:00 pm (Hora de almuerzo de 12:00 am a 1:00 pm)
+
+Sábado: Se atiende desde las 9:00 am hasta las 12:00 pm
+
+Domingo: La peluquería se encuentra cerrada.
+
+## 3. Endpoints del Sistema
 
 ### Registro (Mascota y Dueño)
 Método / Ruta: `POST /api/pets`
@@ -28,7 +37,7 @@ Descripción: Registra la información del dueño y la mascota en el sistema.
 {
   "client_name": "Daniel Rojas",
   "client_email": "daniel@example.com",
-  "client_phone": "0991234567",
+  "client_phone": "3291234567",
   "pet_name": "Zeus",
   "pet_species": "Perro"
 }
@@ -47,7 +56,7 @@ Descripción: Registra la información del dueño y la mascota en el sistema.
   "message": "La especie seleccionada no es válida o faltan campos obligatorios."
 }
 
----
+
 
 ### Consulta
 Método / Ruta: `GET /api/appointments/availability?date=YYYY-MM-DD`
@@ -71,7 +80,7 @@ Descripción: Devuelve los bloques de horario del día (09:00 a 17:00) indicando
   ]
 }
 
----
+
 
 ### Agendamiento
 Método / Ruta: `POST /api/appointments`
@@ -99,7 +108,6 @@ Descripción: Crea la reserva de una cita para un bloque de tiempo específico.
   "message": "El horario seleccionado fue reservado en el último segundo. Por favor selecciona otro."
 }
 
----
 
 ### Agenda Diaria
 Método / Ruta: `GET /api/appointments/daily?date=YYYY-MM-DD`
@@ -115,7 +123,7 @@ Descripción: Devuelve el listado de todas las citas agendadas para el día indi
     {
       "appointment_id": "987f6543-e21b-34c5-b678-876543210987",
       "time_slot": "10:00",
-      "pet_name": "Firulais",
+      "pet_name": "Zeus",
       "pet_species": "Perro",
       "client_name": "Daniel Rojas",
       "client_phone": "0991234567"

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.core.database import Base, engine
 from app.routes import health, pets, appointments
+from fastapi.middleware.cors import CORSMiddleware
 
 Base.metadata.create_all(bind=engine)
 
