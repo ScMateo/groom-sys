@@ -14,7 +14,9 @@ Todas las respuestas de error utilizan el código HTTP correspondiente y la sigu
 200 OK: Petición procesada correctamente.
 201 Created: Recurso creado exitosamente.
 400 Bad Request: Datos de entrada inválidos o faltantes.
+401 Unauthorized: Credenciales de administrador incorrectas.
 409 Conflict: Conflicto de estado (ej. horario reservado por otro usuario).
+422 Unprocessable Entity: Error de validación en tipos o formatos de datos.
 500 Internal Server Error: Error no esperado en el servidor.
 
 ## 2. Horarios
@@ -79,7 +81,6 @@ Descripción: Devuelve los bloques de horario del día (09:00 a 17:00) indicando
     { "time": "16:00", "available": true }
   ]
 }
-
 
 
 ### Agendamiento
