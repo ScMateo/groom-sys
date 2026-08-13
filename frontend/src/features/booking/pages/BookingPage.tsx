@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { addMonths, getMonth, getYear, isSameMonth, startOfMonth, subMonths } from "date-fns";
+import { Navigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
 import Button from "../../../components/ui/Button";
@@ -9,10 +10,11 @@ import Input from "../../../components/ui/Input";
 import { ChevronLeftIcon } from "../../../components/common/icons";
 import AvailabilityCalendar from "../components/AvailabilityCalendar";
 import TimeSlotPicker from "../components/TimeSlotPicker";
-import { createPet, type PetSpecies } from "../api/petsApi";
+import { createPet, fetchClientPets, SPECIES_LABEL, type ClientPet, type PetSpecies } from "../api/petsApi";
 import { createAppointment, fetchDayAvailability, type TimeSlot } from "../api/appointmentsApi";
 import { formatDateKey } from "../utils/date";
 import { bookingSchema, type BookingFormValues } from "../schemas/bookingSchema";
+import type { ClientState } from "../../auth/types";
 import type { RequestStatus } from "../../../types/request-status";
 
 // La página tiene 2 pasos: primero se llena el formulario y luego se elige fecha/hora.
@@ -31,6 +33,10 @@ interface ApiErrorResponse {
 }
 
 function BookingPage() {
+  // El cliente ya fue identificado (correo verificado o recién registrado) en las pantallas previas.
+  const location = useLocation();
+  const client = location.state as ClientState | null;
+
   // En qué paso está el usuario: llenando el formulario o eligiendo fecha/hora.
   const [step, setStep] = useState<Step>("form");
 
@@ -48,6 +54,9 @@ function BookingPage() {
   const [slots, setSlots] = useState<TimeSlot[] | null>(null);
   const [slotsFetchError, setSlotsFetchError] = useState(false);
 
+  // Mascotas ya registradas para este cliente, para ofrecerlas en un desplegable.
+  const [pets, setPets] = useState<ClientPet[] | null>(null);
+
   // Estado del envío final (crear mascota + crear cita).
   const [status, setStatus] = useState<RequestStatus>("idle");
   const [submitError, setSubmitError] = useState("");
@@ -58,6 +67,7 @@ function BookingPage() {
     register,
     handleSubmit,
     getValues,
+    setValue,
     formState: { errors },
   } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingSchema),
@@ -92,6 +102,18 @@ function BookingPage() {
         setSlotsFetchError(true);
       });
   }, [selectedDate]);
+
+  // pedir al back las mascotas ya registradas de este cliente.
+  useEffect(() => {
+    if (!client) return;
+
+    fetchClientPets(client.email)
+      .then(setPets)
+      .catch(() => setPets([]));
+  }, [client]);
+
+  // Mascotas existentes que coinciden con la especie elegida.
+  const petsForSpecies = species ? (pets ?? []).filter((pet) => pet.species === SPECIES_LABEL[species]) : [];
 
   const resetDateSelection = () => {
     setShowSundayNotice(false);
@@ -142,7 +164,7 @@ function BookingPage() {
 
   // Al confirmar: 1) crea la mascota, 2) crea la cita con ese pet_id.
   const handleConfirmBooking = async () => {
-    if (!species || !selectedDate || !selectedTime || status === "loading") return;
+    if (!client || !species || !selectedDate || !selectedTime || status === "loading") return;
 
     const data = getValues();
 
@@ -151,9 +173,7 @@ function BookingPage() {
 
     try {
       const pet = await createPet({
-        clientName: data.clientName,
-        clientEmail: data.clientEmail,
-        clientPhone: data.clientPhone,
+        clientId: client.id,
         petName: data.petName,
         species,
       });
@@ -195,6 +215,11 @@ function BookingPage() {
     return "Agendar cita";
   }
 
+  // Si se llega a esta ruta sin haber verificado/creado el cliente antes, se regresa al inicio.
+  if (!client) {
+    return <Navigate to="/" replace />;
+  }
+
   if (success) {
     return (
       <main className="min-h-screen bg-brand-beige p-4">
@@ -213,29 +238,11 @@ function BookingPage() {
       <main className="min-h-screen bg-brand-beige p-4">
         <div className="mx-auto w-full max-w-md border border-brand-teal-light bg-white p-4">
           <h1 className="text-xl text-brand-teal">Agenda tu cita</h1>
-          <p className="mt-1 text-sm text-slate-700">Cuéntanos de ti y de tu mascota</p>
+          <p className="mt-1 text-sm text-slate-700">
+            Hola {client.name}, cuéntanos de tu mascota
+          </p>
 
           <form className="mt-4 space-y-4" noValidate onSubmit={handleGoToSchedule}>
-            <Input
-              label="Tu nombre"
-              placeholder="Daniel Rojas"
-              error={errors.clientName?.message}
-              {...register("clientName")}
-            />
-            <Input
-              label="Tu correo"
-              type="email"
-              placeholder="daniel@example.com"
-              error={errors.clientEmail?.message}
-              {...register("clientEmail")}
-            />
-            <Input
-              label="Tu teléfono"
-              placeholder="312340000"
-              error={errors.clientPhone?.message}
-              {...register("clientPhone")}
-            />
-
             <div>
               <span className="mb-2 block text-sm text-slate-800">Tipo de mascota</span>
               <div className="grid grid-cols-2 gap-3">
@@ -246,6 +253,7 @@ function BookingPage() {
                     onClick={() => {
                       setSpecies(option.value);
                       setSpeciesTouched(true);
+                      setValue("petName", "");
                     }}
                     aria-pressed={species === option.value}
                     className={
@@ -262,6 +270,28 @@ function BookingPage() {
                 <p className="mt-1 text-xs text-red-500">Selecciona el tipo de mascota.</p>
               )}
             </div>
+
+            {species && petsForSpecies.length > 0 && (
+              <div>
+                <label htmlFor="existingPet" className="mb-1 block text-sm text-slate-800">
+                  ¿Ya la registraste antes?
+                </label>
+                <select
+                  key={species}
+                  id="existingPet"
+                  defaultValue=""
+                  onChange={(event) => setValue("petName", event.target.value, { shouldValidate: true })}
+                  className="w-full border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-teal focus:outline-none"
+                >
+                  <option value="">Nueva mascota</option>
+                  {petsForSpecies.map((pet) => (
+                    <option key={pet.id} value={pet.name}>
+                      {pet.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <Input
               label="Nombre de tu mascota"

@@ -9,29 +9,36 @@ export const SPECIES_LABEL: Record<PetSpecies, string> = {
 };
 
 export interface CreatePetInput {
-  clientName: string;
-  clientEmail: string;
-  clientPhone: string;
+  clientId: string;
   petName: string;
   species: PetSpecies;
 }
 
 export interface CreatePetResponse {
   pet_id: string;
-  client_email: string;
-  pet_name: string;
-  pet_species: string;
+  client_id: string;
+  is_new: boolean;
 }
 
 export async function createPet(input: CreatePetInput): Promise<CreatePetResponse> {
-  // verifica si existe el cliente y su mascota.
+  // el cliente ya existe (verificado/creado en las pantallas previas), solo falta la mascota.
   const response = await apiClient.post("/api/pets", {
-    client_name: input.clientName,
-    client_email: input.clientEmail,
-    client_phone: input.clientPhone,
+    client_id: input.clientId,
     pet_name: input.petName,
     pet_species: SPECIES_LABEL[input.species],
   });
 
   return response.data;
+}
+
+export interface ClientPet {
+  id: string;
+  name: string;
+  species: string;
+  created_at: string;
+}
+
+export async function fetchClientPets(email: string): Promise<ClientPet[]> {
+  const response = await apiClient.get("/api/pets", { params: { email } });
+  return response.data.pets;
 }
